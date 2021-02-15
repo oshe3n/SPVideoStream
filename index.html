@@ -1,0 +1,196 @@
+
+<html>
+
+    <head>
+      <title>INFY ME DEMO</title>
+      <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.2/jquery.min.js"></script>
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap.min.css">
+      <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/css/bootstrap-theme.min.css">
+      <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.1/js/bootstrap.min.js"></script>
+
+      <!-- msal.js with a fallback to backup CDN -->
+      <script type="text/javascript" src="https://alcdn.msauth.net/lib/1.2.1/js/msal.js" integrity="sha384-9TV1245fz+BaI+VvCjMYL0YDMElLBwNS84v3mY57pXNOt6xcUYch2QLImaTahcOP" crossorigin="anonymous"></script>
+      <script type="text/javascript">
+        if(typeof Msal === 'undefined')document.write(unescape("%3Cscript src='https://alcdn.msftauth.net/lib/1.2.1/js/msal.js' type='text/javascript' integrity='sha384-m/3NDUcz4krpIIiHgpeO0O8uxSghb+lfBTngquAo2Zuy2fEF+YgFeP08PWFo5FiJ' crossorigin='anonymous'%3E%3C/script%3E"));
+      </script>
+
+      <link href="https://vjs.zencdn.net/7.10.2/video-js.css" rel="stylesheet" />
+      <script src="https://vjs.zencdn.net/7.10.2/video.min.js"></script>
+    </head>
+
+    <body>
+      <div style="margin:100px;">
+        
+        <nav class="navbar navbar-inverse navbar-static-top">
+      <div class="container">
+        <a class="navbar-brand" href="/">INFY ME</a>
+        <ul class="nav navbar-nav">
+          <li class="active">
+            <a href="/">HOME</a>
+          </li>
+          <li>
+            <a href="/about">SITE MAP</a>
+          </li>
+          <li>
+            <a href="/about">ABOUT</a>
+          </li>
+        </ul>
+      </div>
+        </nav>
+
+        <div class="jumbotron"  style="padding:40px;">
+          <h1 id="nameh">Hello world!</h1>
+          <p>This a simple representation of Line Of Business Application</p>
+          <p>
+            <a class="btn btn-primary btn-lg" href="#" role="button" id="btn" onclick="btnClick()">Sign in</a>
+            <a class="btn btn-primary btn-lg" href="#" role="button" id="btn2" onclick="btnAPI()" disabled>Get Videos</a>
+          </p>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <ul class="list-group" id="mylist">
+              
+            </ul>
+
+          </div>
+          <div class="col-md-6" id="playback" >
+
+          </div>
+          
+        </div>
+
+      </div>
+    </body>
+
+    <script>
+
+      const msalConfig = {
+        auth: {
+          clientId: "7a6ca15f-873e-4934-b7cf-b1515f748ddd",
+          authority: "https://login.microsoftonline.com/bbc4a0c6-5da8-451e-8604-b0e23a37bc9e/",
+          redirectUri: "http://localhost:3000",
+        },
+        cache: {
+          cacheLocation: "sessionStorage", // This configures where your cache will be stored
+          storeAuthStateInCookie: true, // Set this to "true" if you are having issues on IE11 or Edge
+        }
+      };
+
+      // Add here scopes for id token to be used at MS Identity Platform endpoints.
+      const loginRequest = {
+        scopes: ["openid","profile", "User.Read"]
+      };
+
+      // Add here scopes for access token to be used at MS Graph API endpoints.
+      const tokenRequest = {
+        scopes: ["openid", "Files.Read"]
+      };      
+    
+      const endpointURL = "https://graph.microsoft.com/v1.0/sites/71c1db83-1929-436d-9475-cf734fffa7bf/drive/root/children"
+
+      const myMSALObj = new Msal.UserAgentApplication(msalConfig);
+
+      function signIn() 
+      {       
+        $('#btn2').removeAttr('disabled');
+        myMSALObj.loginPopup(loginRequest)
+          .then(loginResponse => {
+            console.log('id_token acquired at: ' + new Date().toString());
+            console.log(loginResponse);                        
+            document.getElementById('btn').parentNode.removeChild(document.getElementById('btn'));
+            document.getElementById("nameh").innerHTML = "Hello "+loginResponse.account.name;            
+          }).catch(error => {
+            console.log(error);
+        });
+
+      }          
+
+      function getTokenPopup(request) {
+        return myMSALObj.acquireTokenSilent(request)
+          .catch(error => {
+            console.log(error);
+            console.log("silent token acquisition fails. acquiring token using popup");
+
+            // fallback to interaction when silent call fails
+              return myMSALObj.acquireTokenPopup(request)
+                .then(tokenResponse => {
+                  return tokenResponse;
+                }).catch(error => {
+                  console.log(error);
+                });
+          });
+      }
+
+      function btnClick(){
+        signIn()
+      }
+
+      function btnAPI(){
+        getTokenPopup(loginRequest)
+        .then(response => {          
+          var xmlHttp = new XMLHttpRequest();
+          xmlHttp.onreadystatechange = function () {
+              if (this.readyState == 4 && this.status == 200) {                
+                var res = (JSON.parse(this.responseText));
+                console.log(res.value)
+                var k=0
+                res.value.forEach(element => {
+                  //console.log(element['@microsoft.graph.downloadUrl'])                  
+                  $( "#mylist" ).append( `<li class="list-group-item" id=`+element['@microsoft.graph.downloadUrl']+`><a>`+element.name+`</a></li>` );
+                  k+=1
+                });
+
+                $(function() {    
+                  $("#mylist li").each(function() {
+                      $(this).click(make);            
+                  });
+                  function make() {
+                        fun1(this) ;
+                  }
+                });
+
+              }
+          }
+          xmlHttp.open("GET", endpointURL, true); // true for asynchronous
+          xmlHttp.setRequestHeader('Authorization', 'Bearer ' + response.accessToken);
+          xmlHttp.send();
+          
+        })
+      }
+
+      function fun1 (x){
+        console.log($(x).attr('id'))
+        
+        $("#playback").html(
+
+        `<video
+              id="my-video"
+              class="video-js"
+              controls
+              preload="auto"
+              width="740"
+              height="364"
+              poster="MY_VIDEO_POSTER.jpg"
+              data-setup="{}"
+              >
+              <source src="`+$(x).attr('id')+`" type="video/mp4" />          
+              <p class="vjs-no-js">
+                To view this video please enable JavaScript, and consider upgrading to a
+                web browser that
+                <a href="https://videojs.com/html5-video-support/" target="_blank"
+                  >supports HTML5 video</a
+                >
+              </p>
+              </video>`
+
+
+        )
+        
+      }
+
+  
+    </script>
+
+
+</html>
